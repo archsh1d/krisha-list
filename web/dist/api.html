@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>API разработчикам — Krisha List</title>
+  <style>
+    :root { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #171717; background: #fafafa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { max-width: 980px; margin: auto; padding: 25px 24px; display: flex; justify-content: space-between; border-bottom: 1px solid #e6e6e6; }
+    header a { color: inherit; text-decoration: none; font-size: 14px; font-weight: 680; }
+    header span { color: #747474; font-size: 13px; }
+    main { max-width: 980px; margin: auto; padding: 72px 24px 100px; }
+    .eyebrow { margin: 0 0 14px; color: #747474; font-size: 11px; font-weight: 700; letter-spacing: .13em; text-transform: uppercase; }
+    h1 { max-width: 680px; margin: 0; font-size: clamp(40px, 6vw, 68px); line-height: 1.04; letter-spacing: -.055em; }
+    .lead { max-width: 660px; margin: 25px 0 62px; color: #595959; font-size: 18px; line-height: 1.55; }
+    section { padding: 34px 0; border-top: 1px solid #e5e5e5; }
+    h2 { margin: 0 0 15px; font-size: 23px; letter-spacing: -.03em; }
+    p { max-width: 720px; color: #555; line-height: 1.6; }
+    code, pre { font: 12px/1.5 Consolas, "Courier New", monospace; }
+    pre { overflow-x: auto; margin: 19px 0; padding: 22px; border-radius: 11px; background: #171717; color: #f4f4f4; line-height: 1.6; }
+    .route { display: flex; gap: 18px; align-items: baseline; padding: 12px 0; border-top: 1px solid #ececec; font-size: 14px; }
+    .route code { min-width: 260px; color: #171717; }
+    .route span { color: #666; }
+    .note { padding: 20px 22px; border-radius: 10px; background: #ededed; }
+    a { color: #171717; text-underline-offset: 3px; }
+    @media(max-width:600px) { main { padding-top: 50px; } .route { display: block; } .route span { display: block; margin-top: 4px; } }
+  </style>
+</head>
+<body>
+  <header><a href="/">Krisha List</a><span>Документация API · v1</span></header>
+  <main>
+    <p class="eyebrow">Для серверных интеграций</p>
+    <h1>Ваши данные.<br>Ваши сервисы.</h1>
+    <p class="lead">Используйте сохранённые карточки, историю цен и результаты сбора через JSON API. Опубликованная страница содержит документацию; данные остаются на вашем экземпляре локального сервера.</p>
+    <p class="note">Автоматический доступ к Krisha.kz и извлечение объявлений требуют собственного письменного разрешения Kolesa согласно <a href="https://krisha.kz/content/special/agreement">п. 5.3 соглашения</a>. Код и API не предоставляют такого разрешения. Живой сбор может останавливаться при HTTP 468; сохранённый снимок не является свежими данными.</p>
+    <section>
+      <h2>Запуск</h2>
+      <p>Создайте случайный токен длиной не менее 32 символов, сохраните его локально и запустите сервер:</p>
+      <pre><code>.venv\Scripts\python -c "import secrets; from pathlib import Path; Path('data/api-token.txt').write_text(secrets.token_urlsafe(32), encoding='utf-8')"
+.venv\Scripts\python -m krisha_list serve --enable-live --api-token-file data/api-token.txt</code></pre>
+      <p>По умолчанию API слушает <code>127.0.0.1:8765</code>. Для сетевой интеграции укажите <code>--host 0.0.0.0</code> и разместите его за HTTPS-прокси. Без токена сетевой запуск запрещён.</p>
+    </section>
+    <section>
+      <h2>Маршруты</h2>
+      <div class="route"><code>GET /api/v1/status</code><span>Состояние сервера</span></div>
+      <div class="route"><code>GET /api/v1/listings</code><span>Карточки, фильтры и пагинация</span></div>
+      <div class="route"><code>GET /api/v1/listings/{id}</code><span>Карточка и история цены</span></div>
+      <div class="route"><code>GET /api/v1/runs</code><span>Последние запуски</span></div>
+      <div class="route"><code>GET /api/v1/runs/{id}</code><span>Один запуск</span></div>
+      <div class="route"><code>POST /api/v1/collections</code><span>Сбор с ответом после завершения</span></div>
+      <div class="route"><code>GET /api/v1/openapi.json</code><span>Спецификация без токена</span></div>
+      <p>Для списка доступны <code>category</code>, <code>city</code>, <code>district</code>, <code>bounds</code>, <code>updated_after</code>, <code>limit</code> и <code>offset</code>. Все параметры описаны в <a href="openapi.json">OpenAPI 3.1</a>.</p>
+    </section>
+    <section>
+      <h2>Пример запроса</h2>
+      <pre><code>$token = (Get-Content data/api-token.txt -Raw).Trim()
+Invoke-RestMethod -Uri 'http://127.0.0.1:8765/api/v1/listings?category=house&amp;limit=50' -Headers @{ Authorization = "Bearer $token" }</code></pre>
+      <p>Ответ содержит <code>data</code> и <code>page.next_offset</code>. Запрашивайте следующие страницы, пока <code>next_offset</code> не станет <code>null</code>. Отдельная карточка содержит историю цен.</p>
+      <div class="note"><p>Держите токен на сервере интеграции. Браузерные запросы с заголовком Origin отклоняются. API не отменяет паузы и отказы Krisha.kz при сборе.</p></div>
+    </section>
+  </main>
+</body>
+</html>

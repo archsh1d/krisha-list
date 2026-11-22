@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "krisha-list"
+version = "0.1.0"
+description = "Research collector for Krisha.kz house, dacha and apartment search listings"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4>=4.12,<5",
+    "requests>=2.31,<3",
+]
+
+[project.scripts]
+krisha-list = "krisha_list.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

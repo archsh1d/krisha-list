@@ -1,0 +1,118 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Krisha List API",
+    "version": "1.0.0",
+    "description": "Серверный API локального сборщика. Данные и сбор доступны только на запущенном экземпляре Python-сервера."
+  },
+  "servers": [{ "url": "http://127.0.0.1:8765" }],
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/api/v1/openapi.json": {
+      "get": {
+        "summary": "Описание API",
+        "security": [],
+        "responses": { "200": { "description": "OpenAPI 3.1 JSON" } }
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "summary": "Состояние сервера и число записей",
+        "responses": { "200": { "description": "Сервер доступен", "content": { "application/json": { "schema": { "type": "object", "properties": { "version": { "type": "string" }, "live_enabled": { "type": "boolean" }, "database": { "type": "object" } } } } } } }
+      }
+    },
+    "/api/v1/listings": {
+      "get": {
+        "summary": "Страница сохранённых объявлений",
+        "parameters": [
+          { "name": "category", "in": "query", "schema": { "type": "string", "enum": ["house", "apartment"] } },
+          { "name": "city", "in": "query", "description": "Точное название города из карточки", "schema": { "type": "string", "maxLength": 120 } },
+          { "name": "district", "in": "query", "description": "Точное название района из карточки", "schema": { "type": "string", "maxLength": 120 } },
+          { "name": "bounds", "in": "query", "description": "Север,запад,юг,восток", "schema": { "type": "string", "example": "43.26,76.85,43.22,76.92" } },
+          { "name": "updated_after", "in": "query", "description": "ISO 8601 с часовым поясом; фильтр по last_seen_at", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 50 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0, "maximum": 100000, "default": 0 } }
+        ],
+        "responses": {
+          "200": { "description": "Объявления и параметры страницы", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Listing" } }, "page": { "$ref": "#/components/schemas/Page" } } } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/api/v1/listings/{id}": {
+      "get": {
+        "summary": "Объявление и история цены",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1 } }],
+        "responses": { "200": { "description": "Карточка", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Listing" } } } } } }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "summary": "Последние запуски сбора",
+        "parameters": [{ "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 } }],
+        "responses": { "200": { "description": "Журнал", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "type": "array", "items": { "$ref": "#/components/schemas/Run" } } } } } } } }
+      }
+    },
+    "/api/v1/runs/{id}": {
+      "get": {
+        "summary": "Результат одного запуска",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "minimum": 1 } }],
+        "responses": { "200": { "description": "Запуск", "content": { "application/json": { "schema": { "type": "object", "properties": { "data": { "$ref": "#/components/schemas/Run" } } } } } }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/api/v1/collections": {
+      "post": {
+        "summary": "Запустить сбор и дождаться результата",
+        "description": "Синхронный запрос. Действуют те же паузы, кэш и ошибки источника, что в локальном интерфейсе. При отключённом --enable-live возвращает 403.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "url": { "type": "string", "format": "uri", "description": "HTTPS-ссылка на выдачу Krisha.kz" },
+          "max_pages": { "type": "integer", "minimum": 0, "maximum": 10, "default": 1, "description": "0 = вся доступная пагинация" },
+          "bounds": { "type": "string", "description": "Север,запад,юг,восток" },
+          "polygon": { "type": "array", "minItems": 3, "items": { "type": "array", "prefixItems": [{ "type": "number" }, { "type": "number" }], "minItems": 2, "maxItems": 2 } },
+          "location_query": { "type": "string", "maxLength": 120, "description": "Отбор по району или микрорайону после загрузки страниц города; несовместим с bounds и polygon" }
+        }, "additionalProperties": false } } } },
+        "responses": {
+          "200": { "description": "Итог сбора или повторно использованный снимок", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CollectionResult" } } } },
+          "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" },
+          "403": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Error" },
+          "502": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "bearerAuth": { "type": "http", "scheme": "bearer" } },
+    "schemas": {
+      "Listing": { "type": "object", "properties": {
+        "id": { "type": "integer" }, "url": { "type": "string", "format": "uri" }, "category": { "type": "string" },
+        "title": { "type": "string" }, "price_kzt": { "type": ["integer", "null"] },
+        "city": { "type": ["string", "null"] }, "district": { "type": ["string", "null"] },
+        "address": { "type": ["string", "null"] }, "latitude": { "type": ["number", "null"] },
+        "longitude": { "type": ["number", "null"] }, "first_seen_at": { "type": "string" },
+        "last_seen_at": { "type": "string" }, "history": { "type": "array", "items": { "type": "object" } }
+      }, "additionalProperties": true },
+      "Page": { "type": "object", "properties": {
+        "total": { "type": "integer" }, "limit": { "type": "integer" }, "offset": { "type": "integer" },
+        "next_offset": { "type": ["integer", "null"] }
+      } },
+      "Run": { "type": "object", "properties": {
+        "id": { "type": "integer" }, "kind": { "type": "string" }, "status": { "type": "string" },
+        "started_at": { "type": "string" }, "finished_at": { "type": ["string", "null"] },
+        "pages": { "type": "integer" }, "unique_ids": { "type": "integer" },
+        "request": { "type": "object" }, "error": { "type": ["string", "null"] }
+      }, "additionalProperties": true },
+      "CollectionResult": { "type": "object", "properties": {
+        "run_id": { "type": "integer" }, "pages": { "type": "integer" }, "unique_ids": { "type": "integer" },
+        "pagination_exhausted": { "type": "boolean" }, "cached": { "type": "boolean" },
+        "listings": { "type": "array", "items": { "$ref": "#/components/schemas/Listing" } }
+      }, "additionalProperties": true }
+    },
+    "responses": {
+      "Error": { "description": "Ошибка", "content": { "application/json": { "schema": { "type": "object", "properties": { "error": { "type": "object", "properties": { "code": { "type": "string" }, "message": { "type": "string" } } } } } } } }
+    }
+  }
+}

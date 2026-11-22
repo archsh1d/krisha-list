@@ -1,0 +1,24 @@
+services:
+  krisha-list:
+    build: .
+    ports:
+      - "127.0.0.1:${KRISHA_HOST_PORT:-8765}:8765"
+    environment:
+      KRISHA_API_TOKEN: ${KRISHA_API_TOKEN:?Run python scripts/init_env.py first}
+      KRISHA_ENABLE_LIVE: ${KRISHA_ENABLE_LIVE:-0}
+      KRISHA_HOST_PORT: ${KRISHA_HOST_PORT:-8765}
+    volumes:
+      - krisha_data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 1g
+    restart: unless-stopped
+
+volumes:
+  krisha_data:

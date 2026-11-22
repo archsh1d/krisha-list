@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Сбор и анализ объявлений недвижимости по области и фильтрам">
+  <title>Krisha List — каталог недвижимости</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="styles.css?v=24">
+  <script src="vendor/leaflet/leaflet.js" defer></script>
+  <script src="app.js?v=26" defer></script>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Krisha List — главная">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <span>Krisha <strong>List</strong></span>
+      </a>
+      <span class="topbar-note">Инструмент исследования</span>
+    </header>
+
+    <main>
+      <section class="intro" aria-labelledby="page-title">
+        <div class="intro-copy">
+          <p class="intro-context">ГОРОДА / НЕДВИЖИМОСТЬ</p>
+          <h1 id="page-title">Объявления. В деталях.</h1>
+          <p>Выберите область, соберите данные и сравнивайте объекты в таблице и на карте.</p>
+        </div>
+      </section>
+
+      <div class="work-area">
+        <aside class="import-panel" aria-labelledby="import-title">
+          <div class="panel-heading">
+            <h2 id="import-title">Сбор объявлений</h2>
+            <span class="panel-caption">Источник: Krisha.kz</span>
+          </div>
+
+          <div class="live-panel" id="live-panel">
+            <div id="live-controls">
+              <div class="field-row">
+                <label for="live-category">Недвижимость</label>
+                <select id="live-category"><option value="house">Дома и дачи</option><option value="apartment">Квартиры</option></select>
+              </div>
+              <div class="field-row">
+                <label for="live-pages">Объём сбора</label>
+                <select id="live-pages"><option value="1">1 страница</option><option value="10">До 10 страниц</option><option value="0">Все страницы</option></select>
+              </div>
+
+              <div class="field-row">
+                <label for="live-city">Город</label>
+                <select id="live-city"><option value="almaty">Алматы</option><option value="astana">Астана</option><option value="shymkent">Шымкент</option><option value="aktau">Актау</option><option value="aktobe">Актобе</option><option value="atyrau">Атырау</option><option value="karaganda">Караганда</option><option value="pavlodar">Павлодар</option><option value="semej">Семей</option><option value="taraz">Тараз</option></select>
+              </div>
+
+              <div class="location-method" role="group" aria-label="Способ выбора области"><button type="button" id="method-text" aria-pressed="true">По названию</button><button type="button" id="method-map" aria-pressed="false">На карте</button></div>
+              <div class="text-location" id="text-location-controls">
+                <label for="live-place">Район или микрорайон</label>
+                <div class="place-combobox"><input id="live-place" type="search" value="Алмалинский р-н" placeholder="Начните вводить название" autocomplete="off" maxlength="120" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="place-suggestions"><div class="place-suggestions" id="place-suggestions" role="listbox" aria-label="Районы и микрорайоны"></div></div>
+                <p class="field-help" id="location-note">Выберите район или микрорайон из подсказок.</p>
+              </div>
+
+              <details class="disclosure" id="area-controls" hidden>
+                <summary><span>Область</span><span class="summary-value" id="area-summary">Весь город</span></summary>
+                <div class="disclosure-body area-body">
+                  <label class="area-toggle"><input id="area-enabled" type="checkbox"> Использовать выбранную область</label>
+                  <div class="field-row">
+                    <label for="area-mode">Форма области</label>
+                    <select id="area-mode" class="area-mode"><option value="rectangle">Прямоугольник</option><option value="polygon">Полигон на карте</option></select>
+                  </div>
+                  <div class="area-grid" id="rectangle-fields">
+                    <label>Север<input id="area-north" type="number" step="any" value="43.255"></label>
+                    <label>Запад<input id="area-west" type="number" step="any" value="76.87"></label>
+                    <label>Юг<input id="area-south" type="number" step="any" value="43.24"></label>
+                    <label>Восток<input id="area-east" type="number" step="any" value="76.91"></label>
+                  </div>
+                  <p class="field-help" id="polygon-mode-help" hidden>Откройте карту кнопкой ниже, чтобы нарисовать область.</p>
+                  <p class="area-hint">Точки без координат не войдут в выборку.</p>
+                  <p class="area-message" id="area-message" role="status" aria-live="polite"></p>
+                </div>
+              </details>
+
+              <button type="button" class="map-open-button" id="open-polygon-map"><span class="map-open-icon" aria-hidden="true">⌖</span><span>Нарисовать область на карте</span></button>
+
+              <details class="disclosure">
+                <summary><span>Фильтры Krisha</span><span class="summary-value" id="filter-link-summary">По умолчанию</span></summary>
+                <div class="disclosure-body">
+                  <label for="live-search-url">Ссылка на выдачу</label>
+                  <input id="live-search-url" type="url" placeholder="https://krisha.kz/prodazha/...">
+                  <p class="field-help">Параметры из ссылки сохраняются; выбранный город и область заменят её расположение.</p>
+                </div>
+              </details>
+
+              <button class="live-button" id="collect-button" type="button">Собрать объявления</button>
+              <p class="field-help">Для автоматического сбора нужно ваше письменное <a href="https://krisha.kz/content/special/agreement" target="_blank" rel="noopener noreferrer">разрешение Kolesa</a>. При отказе источника сервис покажет сохранённый снимок, если он есть.</p>
+            </div>
+            <details class="helper-disclosure" id="live-local-hint">
+              <summary>Сбор запускается локально</summary>
+              <div>Кнопка откроет локальный сборщик. Запустите его командой:</div>
+              <code>.venv\Scripts\python -m krisha_list serve --enable-live</code>
+            </details>
+            <p class="status" id="status" role="status" aria-live="polite"></p>
+          </div>
+
+          <details class="upload-disclosure">
+            <summary>Загрузить сохранённый HTML</summary>
+            <div class="upload-body">
+              <label class="upload-button" for="html-files" role="button" tabindex="0">Выбрать HTML-файлы</label>
+              <input id="html-files" type="file" accept=".html,.htm,text/html" multiple>
+              <button class="text-button" id="demo-button" type="button">Посмотреть пример</button>
+              <details class="import-help">
+                <summary>Как сохранить страницу</summary>
+                <p>Откройте выдачу Krisha.kz и сохраните её как «Веб-страница, только HTML».</p>
+              </details>
+            </div>
+          </details>
+        </aside>
+
+        <section class="catalog" aria-labelledby="catalog-title">
+          <div class="catalog-head">
+            <div><p class="section-kicker">ВАША ВЫБОРКА</p><h2 id="catalog-title">Объявления <span id="visible-count">0</span></h2><p id="catalog-source-note">Данные сохранены в этом браузере.</p></div>
+            <div class="catalog-actions">
+              <button type="button" class="secondary-button" id="export-button" disabled>Скачать CSV</button>
+              <button type="button" class="quiet-button" id="clear-button" disabled>Очистить</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <label class="search-field"><span class="sr-only">Поиск по объявлениям</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m15.5 15.5 5 5"></path></svg><input id="search" type="search" placeholder="Адрес, описание или ID"></label>
+            <details class="filter-disclosure">
+              <summary>Фильтры</summary>
+              <div class="filter-options">
+                <label><span>Категория</span><select id="category-filter"><option value="">Все категории</option><option value="house">Дома и дачи</option><option value="apartment">Квартиры</option></select></label>
+                <label><span>Тип объекта</span><select id="type-filter"><option value="">Все типы</option></select></label>
+                <label><span>Сортировка</span><select id="sort"><option value="recent">Недавно добавлены</option><option value="price-asc">Цена: по возрастанию</option><option value="price-desc">Цена: по убыванию</option><option value="area-desc">Площадь: сначала больше</option></select></label>
+              </div>
+            </details>
+          </div>
+
+          <div class="view-switch" role="group" aria-label="Вид собранных объявлений">
+            <button type="button" id="view-table" aria-pressed="true">Таблица</button>
+            <button type="button" id="view-map" aria-pressed="false">Карта <span id="map-count">0</span></button>
+          </div>
+
+          <div class="run-toolbar" id="run-toolbar" hidden>
+            <div class="run-summary"><strong id="run-state">Последнее действие</strong><p id="latest-run">История сборов пока пуста.</p></div>
+            <details class="run-disclosure" id="runs-disclosure"><summary>История сборов</summary><div class="run-list" id="run-list"></div></details>
+          </div>
+
+          <section class="analysis" aria-labelledby="analysis-title">
+            <div class="analysis-head"><h3 id="analysis-title">Сводка выборки</h3><span id="analysis-scope">Из 0 сохранённых</span></div>
+            <p class="data-freshness" id="data-freshness">Дата данных появится после сбора.</p>
+            <p class="area-coverage-note" id="area-coverage-note" hidden></p>
+            <div class="metrics" aria-label="Сводка собранных карточек">
+            <div class="metric"><strong id="metric-count">0</strong><span>в выборке</span></div>
+            <div class="metric"><strong id="metric-geo">0</strong><span>с координатами</span></div>
+            <div class="metric"><strong id="metric-price">—</strong><span id="metric-price-label">медиана цены</span></div>
+            <div class="metric"><strong id="metric-unit">—</strong><span id="metric-unit-label">цена объекта / сот.</span></div>
+            <div class="metric"><strong id="metric-changes">0</strong><span>изменений цены</span></div>
+          </div>
+            <div class="analysis-breakdown">
+              <div class="breakdown-head"><div><h4 id="breakdown-title">Цена объекта в расчёте на сотку</h4><p id="analysis-note">Цена дома с участком ÷ площадь участка. Группы менее 5 объектов без медианы.</p></div><div class="breakdown-switch" role="group" aria-label="Группировка стоимости"><button type="button" id="group-rooms" aria-pressed="true">Комнаты</button><button type="button" id="group-area" aria-pressed="false">Площадь</button></div></div>
+              <div id="distribution" class="distribution" aria-live="polite"></div>
+            </div>
+          </section>
+          <div id="listings" class="listings" aria-live="polite"></div>
+          <section id="results-map-panel" class="results-map-panel" aria-label="Собранные объекты на карте" hidden>
+            <div id="results-map" class="results-map" aria-label="Карта собранных объектов"></div>
+            <div id="results-map-empty" class="results-map-empty" hidden>У объектов в текущей выборке нет координат.</div>
+            <div id="map-card" class="map-card" aria-live="polite"><button id="map-card-close" type="button" aria-label="Закрыть сведения об объекте">×</button><div id="map-card-content"></div></div>
+          </section>
+        </section>
+      </div>
+      <dialog id="polygon-dialog" class="polygon-dialog" aria-labelledby="polygon-dialog-title">
+        <div class="polygon-dialog-shell" id="polygon-panel">
+          <div class="polygon-dialog-head"><div><p class="section-kicker">ОБЛАСТЬ СБОРА</p><h2 id="polygon-dialog-title">Выберите область на карте</h2><p class="polygon-instruction">Изменения применятся после сохранения. Для нового контура отметьте минимум три точки.</p></div><button type="button" class="dialog-close" id="close-polygon-map" aria-label="Закрыть карту без сохранения">×</button></div>
+          <div id="polygon-map" class="polygon-map" aria-label="Карта для выбора области"></div>
+          <div class="polygon-dialog-foot"><p class="polygon-message" id="polygon-message" role="status" aria-live="polite"></p><div class="polygon-actions"><button type="button" id="polygon-start">Нарисовать заново</button><button type="button" id="polygon-undo">Убрать точку</button><button type="button" id="polygon-clear">Очистить</button><button type="button" id="polygon-cancel">Отмена</button><button type="button" id="polygon-done" class="polygon-done">Сохранить область</button></div></div>
+        </div>
+      </dialog>
+    </main>
+
+    <footer><span>Krisha List · независимый инструмент</span><a href="api.html">API разработчикам</a><a href="https://krisha.kz/content/special/agreement" target="_blank" rel="noopener noreferrer">Условия источника</a></footer>
+  </div>
+</body>
+</html>
