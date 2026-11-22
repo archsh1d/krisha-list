@@ -21,9 +21,9 @@ FIXTURE = Path(__file__).parent / "fixtures" / "list_page.html"
 TOKEN = "a" * 40
 
 
-class TenRequestServer(ThreadingHTTPServer):
+class ThirteenRequestServer(ThreadingHTTPServer):
     def serve_forever(self):
-        for _ in range(10):
+        for _ in range(13):
             self.handle_request()
 
 
@@ -68,7 +68,7 @@ class ApiV1Tests(TestCase):
                 port = listener.getsockname()[1]
             base = f"http://127.0.0.1:{port}"
             headers = {"Authorization": f"Bearer {TOKEN}"}
-            with patch.object(server_module, "ThreadingHTTPServer", TenRequestServer):
+            with patch.object(server_module, "ThreadingHTTPServer", ThirteenRequestServer):
                 thread = Thread(target=server_module.serve, kwargs={
                     "port": port, "db_path": db, "default_url": URL,
                     "enable_live": False, "api_token": TOKEN,
@@ -84,6 +84,13 @@ class ApiV1Tests(TestCase):
                         sleep(.03)
                 self.assertEqual(spec.status_code, 200)
                 self.assertEqual(spec.json()["openapi"], "3.1.0")
+                english_spec = requests.get(base + "/api/v1/openapi.json?lang=en", timeout=3)
+                kazakh_spec = requests.get(base + "/api/v1/openapi.json?lang=kk", timeout=3)
+                self.assertEqual(english_spec.status_code, 200)
+                self.assertEqual(kazakh_spec.status_code, 200)
+                self.assertIn("Server API", english_spec.json()["info"]["description"])
+                self.assertIn("серверлік API", kazakh_spec.json()["info"]["description"])
+                self.assertEqual(requests.get(base + "/api/v1/openapi.json?lang=fr", timeout=3).status_code, 400)
                 denied = requests.get(base + "/api/v1/listings", timeout=3)
                 self.assertEqual(denied.status_code, 401)
                 self.assertEqual(denied.json()["error"]["code"], "unauthorized")

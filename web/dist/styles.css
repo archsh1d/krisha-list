@@ -359,3 +359,15 @@ footer a:hover { color: var(--ink); text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+/* Language control remains compact beside the brand on narrow screens. */
+.topbar-right { display: flex; align-items: center; gap: 20px; }
+.language-switch { display: inline-flex; align-items: center; padding: 3px; border-radius: 99px; background: #eee; white-space: nowrap; }
+.language-switch button { border: 0; background: transparent; color: #6e6e73; border-radius: 99px; padding: 6px 9px; min-width: 38px; font: inherit; font-size: 11px; font-weight: 680; cursor: pointer; transition: background .22s ease, color .22s ease, box-shadow .22s ease, transform .22s ease; }
+.language-switch button:hover { color: #111; transform: translateY(-1px); }
+.language-switch button[aria-pressed="true"] { background: #fff; color: #111; box-shadow: 0 1px 4px #0002; }
+.language-switch button:focus-visible { outline: 2px solid #555; outline-offset: 2px; }
+@media (max-width: 650px) { .topbar-right { gap: 8px; } .topbar-note { display: none; } }
+@media (prefers-reduced-motion: reduce) { .language-switch button { transition: none; } }
+.language-transition .site-shell { animation: language-change .3s cubic-bezier(.22,1,.36,1); }
+@keyframes language-change { from { opacity: .6; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .language-transition .site-shell { animation: none; } }

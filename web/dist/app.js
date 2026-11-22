@@ -3,12 +3,13 @@
 const STORAGE_KEY = "krisha-list.catalog.v1";
 const AREA_KEY = "krisha-list.area.v1";
 const $ = (selector) => document.querySelector(selector);
+const tr = (value) => window.KrishaI18n.translate(value);
 const isLocalHost = ["127.0.0.1", "localhost"].includes(window.location.hostname);
 const legacyBrowserListings = readSaved();
 const state = { listings: isLocalHost ? [] : legacyBrowserListings, runs: [], storageWarning: false, revision: 0 };
 let shownCount = 100;
-const numberFormat = new Intl.NumberFormat("ru-RU");
-const decimalFormat = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 });
+const numberFormat = { format: (value) => new Intl.NumberFormat(window.KrishaI18n.locale()).format(value) };
+const decimalFormat = { format: (value) => new Intl.NumberFormat(window.KrishaI18n.locale(), { maximumFractionDigits: 1 }).format(value) };
 let resultsView = "table";
 let breakdownMode = "rooms";
 let currentVisible = [];
@@ -211,7 +212,7 @@ function updateText(selector, value) {
 }
 
 function formatPrice(price) {
-  return price == null ? "Цена не указана" : `${numberFormat.format(price)} ₸`;
+  return price == null ? tr("Цена не указана") : `${numberFormat.format(price)} ₸`;
 }
 
 function formatArea(value, unit) {
@@ -226,8 +227,8 @@ function medianOf(values) {
 
 function compactMoney(value) {
   if (value == null) return "—";
-  if (value >= 1_000_000) return `${decimalFormat.format(value / 1_000_000)} млн ₸`;
-  if (value >= 1_000) return `${decimalFormat.format(value / 1_000)} тыс. ₸`;
+  if (value >= 1_000_000) return `${decimalFormat.format(value / 1_000_000)} ${tr("млн ₸")}`;
+  if (value >= 1_000) return `${decimalFormat.format(value / 1_000)} ${tr("тыс. ₸")}`;
   return `${numberFormat.format(Math.round(value))} ₸`;
 }
 
@@ -248,8 +249,8 @@ function analyticsRows(listings, category) {
 
 function distributionGroups(rows, category) {
   if (breakdownMode === "rooms") {
-    const groups = [1, 2, 3, 4, 5].map((room) => ({ label: `${room} комн.`, rows: rows.filter(({ item }) => item.rooms === room) }));
-    groups.push({ label: "6+ комн.", rows: rows.filter(({ item }) => Number.isFinite(item.rooms) && item.rooms >= 6) });
+    const groups = [1, 2, 3, 4, 5].map((room) => ({ label: tr(`${room} комн.`), rows: rows.filter(({ item }) => item.rooms === room) }));
+    groups.push({ label: tr("6+ комн."), rows: rows.filter(({ item }) => Number.isFinite(item.rooms) && item.rooms >= 6) });
     return groups.filter((group) => group.rows.length);
   }
   const thresholds = category === "apartment" ? [0, 40, 60, 80, 120, Infinity] : [0, 80, 120, 180, 250, Infinity];
@@ -279,7 +280,7 @@ function renderAnalysis(visible) {
     latestDate.toDateString() !== earliestDate.toDateString();
   const recentCount = dated.filter((date) => Date.now() - date.getTime() >= 0 && Date.now() - date.getTime() <= 86_400_000).length;
   updateText("#data-freshness", latestDate ?
-    `Последнее наблюдение: ${latestDate.toLocaleString("ru-RU")} · за 24 ч: ${recentCount} из ${visible.length}${mixedDates ? " · есть данные прежних дат" : ""}` :
+    `Последнее наблюдение: ${latestDate.toLocaleString(window.KrishaI18n.locale())} · за 24 ч: ${recentCount} из ${visible.length}${mixedDates ? " · есть данные прежних дат" : ""}` :
     "Даты наблюдения в текущей выборке неизвестны.");
   const missingCoordinates = state.listings.filter((item) => !hasCoordinates(item)).length;
   $("#area-coverage-note").hidden = !currentSelection || !missingCoordinates;
@@ -301,7 +302,7 @@ function renderAnalysis(visible) {
   if (!groups.length) {
     container.innerHTML = `<p class="distribution-empty">${mixedCategories ? "Выберите категорию в фильтрах." : rows.length ? "Для этой группировки не хватает данных." : category === "apartment" ? "Нужны цена и площадь квартир." : "Нужны цена и площадь участков."}</p>`;
   } else {
-    container.innerHTML = groups.map((group) => `<div class="distribution-row${group.count < 5 ? " is-small" : ""}"><span class="distribution-label">${escapeHtml(group.label)}</span><span class="distribution-track">${group.count >= 5 ? `<span class="distribution-fill" style="width:${Math.max(4, Math.round(group.median / maximum * 100))}%"></span>` : ""}</span><strong title="${group.count >= 5 ? escapeHtml(formatPrice(Math.round(group.median))) + ` за 1 ${unit}` : "Менее 5 объектов"}">${group.count >= 5 ? escapeHtml(compactMoney(group.median)) : "—"}</strong><span class="distribution-count">n=${numberFormat.format(group.count)}</span></div>`).join("");
+    container.innerHTML = groups.map((group) => `<div class="distribution-row${group.count < 5 ? " is-small" : ""}"><span class="distribution-label">${escapeHtml(group.label)}</span><span class="distribution-track">${group.count >= 5 ? `<span class="distribution-fill" style="width:${Math.max(4, Math.round(group.median / maximum * 100))}%"></span>` : ""}</span><strong title="${group.count >= 5 ? `${escapeHtml(formatPrice(Math.round(group.median)))} ${tr(`за 1 ${unit}`)}` : tr("Менее 5 объектов")}">${group.count >= 5 ? escapeHtml(compactMoney(group.median)) : "—"}</strong><span class="distribution-count">n=${numberFormat.format(group.count)}</span></div>`).join("");
   }
   animateChange(container);
 }
@@ -702,7 +703,7 @@ function updateResultsMap(visible, selection) {
       closeMapCard();
       selectedMapMarker = marker;
       marker.setStyle({ fillColor: "#0071e3" });
-      $("#map-card-content").innerHTML = `<span class="map-card-label">№ ${escapeHtml(item.id)} · ${item.category === "apartment" ? "Квартира" : "Дом / дача"}</span><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(formatPrice(item.price))}</span><span>${escapeHtml([item.district, item.address].filter(Boolean).join(", ") || "Адрес не указан")}</span><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">Открыть объявление</a>`;
+      $("#map-card-content").innerHTML = `<span class="map-card-label">№ ${escapeHtml(item.id)} · ${tr(item.category === "apartment" ? "Квартира" : "Дом / дача")}</span><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(formatPrice(item.price))}</span><span>${escapeHtml([item.district, item.address].filter(Boolean).join(", ") || tr("Адрес не указан"))}</span><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${tr("Открыть объявление")}</a>`;
       $("#map-card").classList.add("is-visible");
     });
   }
@@ -775,22 +776,22 @@ function render() {
   const rows = visible.slice(0, shownCount).map((item) => {
     const isApartment = item.category === "apartment";
     const details = [
-      item.rooms && `${item.rooms} комн.`,
+      item.rooms && tr(`${item.rooms} комн.`),
       formatArea(isApartment ? item.apartmentArea : item.houseArea, "м²"),
-      isApartment && item.floor && item.buildingFloors ? `${item.floor}/${item.buildingFloors} этаж` : null,
-      isApartment ? item.residentialComplex : formatArea(item.plotArea, "сот.")
+      isApartment && item.floor && item.buildingFloors ? `${item.floor}/${item.buildingFloors} ${tr("этаж")}` : null,
+      isApartment ? item.residentialComplex : formatArea(item.plotArea, tr("сот."))
     ].filter(Boolean);
     const changeCount = Math.max(0, (item.history?.length || 0) - 1);
     const hasGeo = hasCoordinates(item);
     const geoUrl = hasGeo ? `https://www.openstreetmap.org/?mlat=${item.latitude}&mlon=${item.longitude}#map=16/${item.latitude}/${item.longitude}` : "";
-    const address = [item.district, item.address].filter(Boolean).join(", ") || "Адрес не указан";
-    const detail = [item.preview ? `<p>${escapeHtml(item.preview)}</p>` : "", hasGeo ? `<p>Координаты: ${escapeHtml(item.latitude)}, ${escapeHtml(item.longitude)} · <a href="${escapeHtml(geoUrl)}" target="_blank" rel="noopener noreferrer">Открыть на карте ↗</a></p>` : "", changeCount ? `<p>Изменений цены: ${changeCount}</p>` : "", item.seller ? `<p>Продавец: ${escapeHtml(item.seller)}</p>` : ""].filter(Boolean).join("");
+    const address = [item.district, item.address].filter(Boolean).join(", ") || tr("Адрес не указан");
+    const detail = [item.preview ? `<p>${escapeHtml(item.preview)}</p>` : "", hasGeo ? `<p>${tr("Координаты")}: ${escapeHtml(item.latitude)}, ${escapeHtml(item.longitude)} · <a href="${escapeHtml(geoUrl)}" target="_blank" rel="noopener noreferrer">${tr("Открыть на карте ↗")}</a></p>` : "", changeCount ? `<p>${tr("Изменений цены")}: ${changeCount}</p>` : "", item.seller ? `<p>${tr("Продавец")}: ${escapeHtml(item.seller)}</p>` : ""].filter(Boolean).join("");
     return `<tr class="listing-row">
-      <td class="object-cell"><a class="object-title" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a><span class="object-meta">№ ${escapeHtml(item.id)} · ${isApartment ? "Квартира" : "Дом / дача"}${item.demo ? " · Демо" : ""}</span></td>
+      <td class="object-cell"><a class="object-title" href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.title)}</a><span class="object-meta">№ ${escapeHtml(item.id)} · ${tr(isApartment ? "Квартира" : "Дом / дача")}${item.demo ? " · " + tr("Демо") : ""}</span></td>
       <td class="price-cell">${escapeHtml(formatPrice(item.price))}</td>
       <td class="parameters-cell">${details.length ? details.map(escapeHtml).join(" · ") : "—"}</td>
       <td class="address-cell">${escapeHtml(address)}</td>
-      <td class="geo-cell">${hasGeo ? '<span class="geo-dot" aria-hidden="true"></span>Есть' : "—"}</td>
+      <td class="geo-cell">${hasGeo ? '<span class="geo-dot" aria-hidden="true"></span>' + tr("Есть") : "—"}</td>
       <td class="detail-cell"><button type="button" class="row-expand" data-detail-id="${escapeHtml(item.id)}" aria-expanded="false" aria-label="Подробнее об объекте № ${escapeHtml(item.id)}">⌄</button></td>
     </tr><tr class="detail-row" data-detail-row="${escapeHtml(item.id)}" hidden><td colspan="6"><div class="detail-content">${detail || "Дополнительных сведений нет."}<span class="detail-posted">${escapeHtml(item.posted || "")}</span></div></td></tr>`;
   }).join("");
@@ -1076,7 +1077,7 @@ for (const disclosure of document.querySelectorAll("details")) {
 }
 $("#export-button").addEventListener("click", exportCsv);
 $("#clear-button").addEventListener("click", () => {
-  if (!confirm("Удалить все объявления, сохранённые в этом браузере?")) return;
+  if (!confirm(window.KrishaI18n.translate("Удалить все объявления, сохранённые в этом браузере?"))) return;
   save([]);
   setStatus("Каталог очищен.");
 });
@@ -1250,7 +1251,7 @@ function fromServer(item) {
 
 function formatRunDate(value) {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "дата неизвестна" : date.toLocaleString("ru-RU");
+  return Number.isNaN(date.getTime()) ? tr("дата неизвестна") : date.toLocaleString(window.KrishaI18n.locale());
 }
 
 function renderRuns() {
@@ -1265,14 +1266,14 @@ function renderRuns() {
     const when = formatRunDate(latest.finished_at || latest.started_at);
     if (latest.status === "cached") {
       stateTitle = "Новая выдача не получена";
-      summary = `Попытка ${when}${latest.source_status ? ` · HTTP ${latest.source_status}` : ""} · 0 новых страниц. Снимок от ${formatRunDate(latest.cached_at)}: ${latest.unique_ids} ${listingWord(latest.unique_ids)} в том запросе.`;
+      summary = tr(`Попытка ${when}${latest.source_status ? ` · HTTP ${latest.source_status}` : ""} · 0 новых страниц. Снимок от ${formatRunDate(latest.cached_at)}: ${latest.unique_ids} ${listingWord(latest.unique_ids)} в том запросе.`);
     } else if (latest.kind === "browser_import" || latest.status === "imported") {
       stateTitle = "Последнее действие — импорт";
-      summary = `${when} · ${latest.unique_ids} ${listingWord(latest.unique_ids)} в том импорте.`;
+      summary = tr(`${when} · ${latest.unique_ids} ${listingWord(latest.unique_ids)} в том импорте.`);
     } else {
       stateTitle = latest.status === "complete" || latest.status === "limited" ? "Получена новая выдача" :
         latest.status === "running" ? "Сбор выполняется" : "Сбор не завершён";
-      summary = `${when} · ${latest.pages} новых стр. · ${latest.unique_ids} ${listingWord(latest.unique_ids)} в том запросе${latest.source_status ? ` · HTTP ${latest.source_status}` : ""}.`;
+      summary = tr(`${when} · ${latest.pages} новых стр. · ${latest.unique_ids} ${listingWord(latest.unique_ids)} в том запросе${latest.source_status ? ` · HTTP ${latest.source_status}` : ""}.`);
     }
   }
   updateText("#run-state", stateTitle);
@@ -1280,16 +1281,16 @@ function renderRuns() {
   $("#run-list").innerHTML = state.runs.length ? state.runs.map((run) => {
     const request = run.request || {};
     const url = request.requested_url || request.source_url || request.search_url || request.file || "";
-    const area = request.location_query ? `по названию: ${request.location_query}` : request.polygon ? "полигон" : request.bounds ? "прямоугольник" : "без области";
+    const area = tr(request.location_query ? `по названию: ${request.location_query}` : request.polygon ? "полигон" : request.bounds ? "прямоугольник" : "без области");
     const scope = run.kind === "html_import" || run.kind === "cli_import" ? "HTML-файл" : run.kind === "browser_import" ?
-      `Данные браузера · пакет ${request.items || 0} ${listingWord(request.items || 0)}` : `${request.max_pages === 0 ? "все страницы" : `до ${request.max_pages || 1} стр.`} · ${area}`;
+      tr(`Данные браузера · пакет ${request.items || 0} ${listingWord(request.items || 0)}`) : `${tr(request.max_pages === 0 ? "все страницы" : `до ${request.max_pages || 1} стр.`)} · ${area}`;
     const detail = [run.kind === "browser_import" ? null : run.status === "cached" ? "0 новых стр." : run.pages + " стр.",
       `${run.unique_ids} ${listingWord(run.unique_ids)}`, run.kind === "browser_import" ? null : run.with_coordinates + " с точкой",
       run.excluded_without_coordinates ? `${run.excluded_without_coordinates} без точки` : null,
       run.excluded_outside_area ? `${run.excluded_outside_area} вне области` : null,
       run.excluded_outside_location ? `${run.excluded_outside_location} другой адрес` : null,
-      run.source_status ? `HTTP ${run.source_status}` : null].filter(Boolean).join(" · ");
-    return `<div class="run-row"><div><strong>${escapeHtml(labels[run.status] || run.status)}</strong><time>${escapeHtml(formatRunDate(run.finished_at || run.started_at))}</time></div><p>${escapeHtml(scope)} · ${escapeHtml(detail)}</p>${run.cached_at ? `<p>Источник снимка: ${escapeHtml(formatRunDate(run.cached_at))}</p>` : ""}${url ? `<p class="run-url" title="${escapeHtml(url)}">${escapeHtml(url)}</p>` : ""}${run.error ? `<p class="run-error">${escapeHtml(run.error)}</p>` : ""}</div>`;
+      run.source_status ? `HTTP ${run.source_status}` : null].filter(Boolean).map(tr).join(" · ");
+    return `<div class="run-row"><div><strong>${escapeHtml(tr(labels[run.status] || run.status))}</strong><time>${escapeHtml(formatRunDate(run.finished_at || run.started_at))}</time></div><p>${escapeHtml(tr(scope))} · ${escapeHtml(detail)}</p>${run.cached_at ? `<p>${escapeHtml(tr(`Источник снимка: ${formatRunDate(run.cached_at)}`))}</p>` : ""}${url ? `<p class="run-url" title="${escapeHtml(url)}">${escapeHtml(url)}</p>` : ""}${run.error ? `<p class="run-error">${escapeHtml(tr(run.error))}</p>` : ""}</div>`;
   }).join("") : "";
   animateChange($("#run-toolbar"));
 }
@@ -1382,41 +1383,41 @@ $("#collect-button").addEventListener("click", async () => {
     if (result.cached) {
       await refreshCatalog();
       const cachedAt = new Date(result.cached_at);
-      const when = Number.isNaN(cachedAt.getTime()) ? "предыдущего сбора" : cachedAt.toLocaleString("ru-RU");
+      const when = Number.isNaN(cachedAt.getTime()) ? "предыдущего сбора" : cachedAt.toLocaleString(window.KrishaI18n.locale());
       const retryAt = result.next_retry_at ? new Date(result.next_retry_at) : null;
-      const retryWhen = retryAt && !Number.isNaN(retryAt.getTime()) ? retryAt.toLocaleString("ru-RU") : "позже";
-      const accessReason = result.source_status === 200 ? "страницы проверки доступа" : `HTTP ${result.source_status}`;
-      const reason = result.code === "fresh_cache" ? "Недавний сбор с теми же параметрами уже сохранён." :
-        result.code === "source_cooldown_cache" ? `После ${accessReason} запрос отложен до ${retryWhen}.` :
-        result.source_status === 200 ? "Krisha.kz вернул страницу проверки доступа." : `Krisha.kz вернул ${accessReason}.`;
-      setStatus(`${reason} Снимок от ${when}: ${result.unique_ids} ${listingWord(result.unique_ids)}. Новые объявления и цены не проверены.`, result.code !== "fresh_cache");
+      const retryWhen = retryAt && !Number.isNaN(retryAt.getTime()) ? retryAt.toLocaleString(window.KrishaI18n.locale()) : "позже";
+      const accessReason = tr(result.source_status === 200 ? "страницы проверки доступа" : `HTTP ${result.source_status}`);
+      const reason = result.code === "fresh_cache" ? tr("Недавний сбор с теми же параметрами уже сохранён.") :
+        result.code === "source_cooldown_cache" ? tr(`После ${accessReason} запрос отложен до ${retryWhen}.`) :
+        result.source_status === 200 ? tr("Krisha.kz вернул страницу проверки доступа.") : tr(`Krisha.kz вернул ${accessReason}.`);
+      setStatus(`${reason} ${tr(`Снимок от ${when}: ${result.unique_ids} ${listingWord(result.unique_ids)}. Новые объявления и цены не проверены.`)}`, result.code !== "fresh_cache");
       return;
     }
     if (!response.ok) {
       await refreshCatalog();
       if (result.partial && result.listings?.length) {
-        setStatus(`${result.error || "Сбор прерван."} До остановки собрано ${result.unique_ids} ${listingWord(result.unique_ids)} на ${result.pages} страницах. Выдача неполная; данные сохранены в SQLite.`, true);
+        setStatus(`${tr(result.error || "Сбор прерван.")} ${tr(`До остановки собрано ${result.unique_ids} ${listingWord(result.unique_ids)} на ${result.pages} страницах. Выдача неполная; данные сохранены в SQLite.`)}`, true);
         return;
       }
       if (result.code === "source_challenge") {
-        setStatus(`${result.error} Ранее сохранённые карточки остаются в каталоге.`, true);
+        setStatus(`${tr(result.error)} ${tr("Ранее сохранённые карточки остаются в каталоге.")}`, true);
         return;
       }
       if (result.code === "source_cooldown") {
         const retryAt = new Date(result.next_retry_at);
-        const retryWhen = Number.isNaN(retryAt.getTime()) ? "позже" : retryAt.toLocaleString("ru-RU");
-        const accessReason = result.source_status === 200 ? "страницы проверки доступа" : `HTTP ${result.source_status}`;
-        setStatus(`После ${accessReason} новый запрос отложен до ${retryWhen}. Сохранённые карточки остаются в каталоге.`, true);
+        const retryWhen = Number.isNaN(retryAt.getTime()) ? "позже" : retryAt.toLocaleString(window.KrishaI18n.locale());
+        const accessReason = tr(result.source_status === 200 ? "страницы проверки доступа" : `HTTP ${result.source_status}`);
+        setStatus(tr(`После ${accessReason} новый запрос отложен до ${retryWhen}. Сохранённые карточки остаются в каталоге.`), true);
         return;
       }
-      throw new Error(result.error || "Не удалось собрать объявления.");
+      throw new Error(tr(result.error || "Не удалось собрать объявления."));
     }
     await refreshCatalog();
-    const scope = result.bounds ? ` Вне области: ${result.excluded_outside_area ?? result.excluded_outside_bounds}; без координат: ${result.excluded_without_coordinates}.` :
-      result.location_query ? ` По адресу не подошли: ${result.excluded_outside_location ?? 0}.` : "";
-    const pagination = result.pagination_exhausted ? " Доступные страницы выдачи пройдены до конца." : " В выдаче есть следующая страница; выберите «Все страницы» для полного обхода.";
-    const geoWarning = result.status === "partial" ? " Выборка по области неполная из-за ошибки карты." : "";
-    setStatus(`Собрано ${result.unique_ids} ${listingWord(result.unique_ids)} на ${result.pages} ${result.pages === 1 ? "странице" : "страницах"}; с координатами — ${result.with_coordinates}.${scope}${pagination}${geoWarning} HTML и ответы карты сохранены локально.${result.geo_errors?.length ? ` Ошибки карты: ${result.geo_errors.join("; ")}` : ""}`, result.status === "partial");
+    const scope = result.bounds ? ` ${tr(`Вне области: ${result.excluded_outside_area ?? result.excluded_outside_bounds}; без координат: ${result.excluded_without_coordinates}.`)}` :
+      result.location_query ? ` ${tr(`По адресу не подошли: ${result.excluded_outside_location ?? 0}.`)}` : "";
+    const pagination = tr(result.pagination_exhausted ? "Доступные страницы выдачи пройдены до конца." : "В выдаче есть следующая страница; выберите «Все страницы» для полного обхода.");
+    const geoWarning = result.status === "partial" ? ` ${tr("Выборка по области неполная из-за ошибки карты.")}` : "";
+    setStatus(`${tr(`Собрано ${result.unique_ids} ${listingWord(result.unique_ids)} на ${result.pages} ${result.pages === 1 ? "странице" : "страницах"}; с координатами — ${result.with_coordinates}.`)}${scope} ${pagination}${geoWarning} ${tr("HTML и ответы карты сохранены локально.")}${result.geo_errors?.length ? ` ${tr(`Ошибки карты: ${result.geo_errors.join("; ")}`)}` : ""}`, result.status === "partial");
   } catch (error) {
     setStatus(error.message || "Не удалось получить страницы.", true);
   } finally {
@@ -1432,3 +1433,4 @@ showAreaMode();
 showCollectionMode();
 render();
 enhanceSelectMenus();
+window.addEventListener("languagechange", () => { if (openSelectShell) closeSelectMenu(); render(); renderRuns(); });

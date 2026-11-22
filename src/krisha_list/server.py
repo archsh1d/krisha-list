@@ -13,7 +13,7 @@ from email.utils import parsedate_to_datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from bs4 import BeautifulSoup
 
 from .client import CrawlError, PacedSession, SourceHTTPError, crawl_pages, validate_search_url
@@ -131,8 +131,14 @@ def serve(*, port: int, db_path: str | Path, default_url: str, enable_live: bool
 
         def _get_api_v1(self, path: str, query: str) -> None:
             if path == "/api/v1/openapi.json":
+                parameters = parse_qs(query, keep_blank_values=True)
+                language = parameters.get("lang", ["ru"])
+                if set(parameters) - {"lang"} or len(language) != 1 or language[0] not in {"ru", "en", "kk"}:
+                    self._json(400, {"error": "Укажите lang=ru, en или kk", "code": "invalid_locale"})
+                    return
                 try:
-                    self._json(200, json.loads((web_root / "openapi.json").read_text(encoding="utf-8")))
+                    filename = "openapi.json" if language[0] == "ru" else f"openapi.{language[0]}.json"
+                    self._json(200, json.loads((web_root / filename).read_text(encoding="utf-8")))
                 except (OSError, ValueError) as error:
                     self._json(500, {"error": f"Не удалось открыть описание API: {error}"})
                 return

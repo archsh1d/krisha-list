@@ -1,5 +1,7 @@
 # Ограничения, разрешения и интерпретация данных
 
+**Язык:** **Русский** · [English](en/limitations.md) · [Қазақша](kk/limitations.md)
+
 ## Доступ к источнику
 
 Согласно п. 5.3 [пользовательского соглашения Krisha.kz](https://krisha.kz/content/special/agreement),

@@ -24,6 +24,9 @@ jobs:
       - name: Validate web assets
         run: |
           node --check web/dist/app.js
+          node --check web/dist/i18n.js
           python -m json.tool web/dist/openapi.json >/dev/null
+          python scripts/localize_openapi.py --check
+          python scripts/check_docs.py
       - name: Build container
         run: docker build -t krisha-list:test .

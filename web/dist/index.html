@@ -7,9 +7,10 @@
   <meta name="description" content="Сбор и анализ объявлений недвижимости по области и фильтрам">
   <title>Krisha List — каталог недвижимости</title>
   <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="styles.css?v=24">
+  <link rel="stylesheet" href="styles.css?v=25">
   <script src="vendor/leaflet/leaflet.js" defer></script>
-  <script src="app.js?v=26" defer></script>
+  <script src="i18n.js?v=2" defer></script>
+  <script src="app.js?v=28" defer></script>
 </head>
 <body>
   <div class="site-shell">
@@ -18,7 +19,7 @@
         <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
         <span>Krisha <strong>List</strong></span>
       </a>
-      <span class="topbar-note">Инструмент исследования</span>
+      <div class="topbar-right"><span class="topbar-note">Инструмент исследования</span><div class="language-switch" role="group" aria-label="Язык интерфейса"><button type="button" data-lang="ru" aria-pressed="true">RU</button><button type="button" data-lang="kk" aria-pressed="false">ҚАЗ</button><button type="button" data-lang="en" aria-pressed="false">EN</button></div></div>
     </header>
 
     <main>
@@ -180,7 +181,7 @@
       </dialog>
     </main>
 
-    <footer><span>Krisha List · независимый инструмент</span><a href="api.html">API разработчикам</a><a href="https://krisha.kz/content/special/agreement" target="_blank" rel="noopener noreferrer">Условия источника</a></footer>
+    <footer><span>Krisha List · независимый инструмент</span><a href="https://github.com/archsh1d/krisha-list/blob/main/README.md" data-docs target="_blank" rel="noopener noreferrer">Документация</a><a href="api.html">API разработчикам</a><a href="https://krisha.kz/content/special/agreement" target="_blank" rel="noopener noreferrer">Условия источника</a></footer>
   </div>
 </body>
 </html>

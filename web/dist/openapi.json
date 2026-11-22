@@ -12,7 +12,8 @@
       "get": {
         "summary": "Описание API",
         "security": [],
-        "responses": { "200": { "description": "OpenAPI 3.1 JSON" } }
+        "parameters": [{ "name": "lang", "in": "query", "description": "Язык описаний: ru, en или kk", "schema": { "type": "string", "enum": ["ru", "en", "kk"], "default": "ru" } }],
+        "responses": { "200": { "description": "OpenAPI 3.1 JSON" }, "400": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/api/v1/status": {
