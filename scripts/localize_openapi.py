@@ -55,6 +55,10 @@ TRANSLATIONS = {
         "Collection result or reused snapshot",
         "Жинау нәтижесі немесе қайта пайдаланылған көшірме",
     ),
+    "Число точек из подходящего сохранённого снимка": (
+        "Map positions reused from a recent matching snapshot",
+        "Сәйкес келетін соңғы көшірмеден қайта қолданылған карта нүктелерінің саны",
+    ),
     "Ошибка": ("Error", "Қате"),
 }
 
