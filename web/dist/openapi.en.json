@@ -520,6 +520,10 @@
           "unique_ids": {
             "type": "integer"
           },
+          "reused_coordinates": {
+            "type": "integer",
+            "description": "Map positions reused from a recent matching snapshot"
+          },
           "pagination_exhausted": {
             "type": "boolean"
           },

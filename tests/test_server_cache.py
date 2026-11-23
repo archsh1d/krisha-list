@@ -1,6 +1,6 @@
 from http.server import ThreadingHTTPServer
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from socket import socket
 from tempfile import TemporaryDirectory
@@ -154,6 +154,49 @@ class ServerCacheTests(TestCase):
             with ListingStore(root / "test.sqlite3") as store:
                 self.assertEqual(store.counts()["listings"], len(page.listings))
 
+    def test_expired_html_snapshot_reuses_recent_coordinates(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            snapshot = root / "snapshots" / datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+            snapshot.mkdir(parents=True)
+            page = replace(parse_listing_page(FIXTURE.read_text(encoding="utf-8"), BASE_URL), next_url=None)
+            records = [replace(item, latitude=43.25, longitude=76.88,
+                               geo_source="krisha_map_list").as_dict() for item in page.listings]
+            save_success(snapshot, request_identity(BASE_URL, 1, None, None), {
+                "pages": 1, "unique_ids": len(records), "listings": records,
+            })
+            saved = json.loads((snapshot / "result.json").read_text(encoding="utf-8"))
+            saved["collected_at"] = (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
+            (snapshot / "result.json").write_text(json.dumps(saved), encoding="utf-8")
+            with socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+                port = listener.getsockname()[1]
+            with patch.object(server_module, "ThreadingHTTPServer", OneRequestServer), \
+                 patch.object(server_module, "crawl_pages", return_value=iter((page,))) as crawl, \
+                 patch.object(server_module.PacedSession, "get") as map_get:
+                thread = Thread(target=server_module.serve, kwargs={
+                    "port": port, "db_path": root / "test.sqlite3", "default_url": BASE_URL,
+                    "enable_live": True,
+                }, daemon=True)
+                thread.start()
+                for attempt in range(20):
+                    try:
+                        response = requests.post(f"http://127.0.0.1:{port}/api/collect",
+                            json={"url": BASE_URL, "max_pages": 1},
+                            headers={"Origin": f"http://127.0.0.1:{port}"}, timeout=3)
+                        break
+                    except requests.ConnectionError:
+                        if attempt == 19:
+                            raise
+                        sleep(.03)
+                thread.join(timeout=3)
+                crawl.assert_called_once()
+                map_get.assert_not_called()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["reused_coordinates"], len(records))
+            self.assertTrue(all(item["geo_source"] == "krisha_map_list_cached"
+                                for item in response.json()["listings"]))
+
     def test_recent_468_delays_new_requests_without_a_snapshot(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -203,6 +246,14 @@ class ServerCacheTests(TestCase):
                 "status": "blocked", "snapshot_dir": None,
             })
             self.assertEqual(challenge_deadline.isoformat(), "2026-11-21T12:30:00+00:00")
+            self.assertEqual(server_module.source_retry_at({
+                "finished_at": "2026-11-21T12:00:00+00:00", "source_status": 468,
+                "status": "blocked", "snapshot_dir": None,
+            }, consecutive_failures=3).isoformat(), "2026-11-21T14:00:00+00:00")
+            self.assertEqual(server_module.source_retry_at({
+                "finished_at": "2026-11-21T12:00:00+00:00", "source_status": 468,
+                "status": "blocked", "snapshot_dir": None,
+            }, consecutive_failures=8).isoformat(), "2026-11-21T16:00:00+00:00")
 
     def test_access_challenge_returns_last_complete_snapshot_without_retry(self):
         with TemporaryDirectory() as temporary:

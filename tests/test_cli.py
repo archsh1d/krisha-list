@@ -1,11 +1,13 @@
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import csv
 import unittest
+from unittest.mock import patch
 
 from krisha_list.cli import main
+from krisha_list.storage import ListingStore
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "list_page.html"
@@ -14,6 +16,19 @@ APARTMENT_URL = "https://krisha.kz/prodazha/kvartiry/almaty-almalinskij/"
 
 
 class CliTests(unittest.TestCase):
+    def test_collect_respects_persisted_source_cooldown(self):
+        with TemporaryDirectory() as tmp:
+            db = Path(tmp) / "listings.sqlite3"
+            with ListingStore(db) as store:
+                run_id = store.start_run("live", {"search_url": APARTMENT_URL})
+                store.finish_run(run_id, "blocked", {"pages": 0}, source_status=468)
+            with patch("krisha_list.cli.crawl_pages") as crawl, redirect_stderr(StringIO()) as errors:
+                code = main(["collect", "--db", str(db), "--url", APARTMENT_URL,
+                             "--max-pages", "1"])
+            self.assertEqual(code, 2)
+            self.assertIn("отложен до", errors.getvalue())
+            crawl.assert_not_called()
+
     def test_parse_file_stats_and_export(self):
         with TemporaryDirectory() as tmp:
             db = Path(tmp) / "listings.sqlite3"

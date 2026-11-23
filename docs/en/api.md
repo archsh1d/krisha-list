@@ -10,6 +10,8 @@ The API is for server-side clients. **Each instance operator** generates and sto
 
 `POST /collections` needs live collection enabled and source permission. It runs synchronously, so a long crawl may exceed a client timeout. After a dropped connection, check `/runs`. `max_pages=0` visits available pagination, but an HTTP refusal can stop it earlier. A result with `cached=true` comes from a previous snapshot; `pages=0` means zero new pages. Inspect `cached_at`, `source_status`, `geo_errors`, and run history.
 
+`reused_coordinates` counts map positions reused from a complete matching snapshot no more than six hours old.
+
 `GET /listings` supports category, exact city and district, rectangular `bounds`, `updated_after`, `limit`, and `offset`. Offset pages can shift if the catalog changes during reading. For a consistent export, pause collection or back up SQLite first.
 
 The current implementation uses **one token per instance**, without roles, expiration, or per-client quotas. Do not share it with independent developers. A public multi-user API needs a separate gateway and access management; see [security](../../SECURITY.en.md).

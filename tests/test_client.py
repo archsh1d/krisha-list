@@ -53,6 +53,25 @@ class ClientTests(unittest.TestCase):
                 session.get(URL)
         self.assertEqual(sleeps, [3.0])
 
+    def test_paced_session_slows_long_collections(self):
+        clock = [0.0]
+        sleeps = []
+
+        def sleep_for(seconds):
+            sleeps.append(seconds)
+            clock[0] += seconds
+
+        with patch.object(client_module.time, "monotonic", side_effect=lambda: clock[0]), \
+             patch.object(client_module.time, "sleep", side_effect=sleep_for), \
+             patch.object(requests.Session, "get", return_value=object()):
+            with PacedSession(interval=3) as session:
+                for _ in range(20):
+                    session.get(URL)
+        self.assertEqual(sleeps[:5], [3] * 5)
+        self.assertEqual(sleeps[5:11], [6] * 6)
+        self.assertEqual(sleeps[11:17], [9] * 6)
+        self.assertEqual(sleeps[17:], [12] * 2)
+
     def test_follows_next_page_without_collecting_sidebar(self):
         first_html = FIXTURE.read_text(encoding="utf-8")
         second_html = first_html.replace(

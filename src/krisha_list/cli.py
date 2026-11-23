@@ -8,13 +8,14 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .client import CrawlError, PacedSession, crawl_pages, validate_search_url
+from .client import CrawlError, PacedSession, SourceHTTPError, crawl_pages, validate_search_url
 from .area import bounds_from_url, filter_page, parse_bounds, with_bounds
 from .categories import DEFAULT_URLS
 from .geo import GeoEnricher, page_number_from_url
 from .model import PageFormatError
 from .parser import parse_listing_page
 from .storage import ListingStore
+from .source_policy import source_retry_at
 
 DEFAULT_URL = DEFAULT_URLS["house"]
 DEFAULT_DB = "data/krisha.sqlite3"
@@ -71,6 +72,10 @@ def _run(args: argparse.Namespace) -> None:
         if bounds and args.no_geo:
             raise ValueError("Для сбора по области нужны координаты карты; уберите --no-geo")
         search_url = with_bounds(args.url, bounds) if args.bounds else args.url
+        with ListingStore(args.db) as store:
+            retry_at = source_retry_at(store.latest_source_access(), store.source_failure_streak())
+        if retry_at and datetime.now(timezone.utc) < retry_at:
+            raise CrawlError(f"После отказа Krisha.kz новый запрос отложен до {retry_at.isoformat()}")
         if args.snapshot_dir:
             args.snapshot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -119,6 +124,11 @@ def _run(args: argparse.Namespace) -> None:
                     expected = page.total_found if page.total_found is not None else expected
                     print(f"Страница {pages}: {len(page.listings)} карточек", file=sys.stderr)
             except Exception as error:
+                if isinstance(error, SourceHTTPError) and args.snapshot_dir:
+                    (args.snapshot_dir / "source-error.json").write_text(json.dumps({
+                        "status": error.status_code, "url": error.url,
+                        "response": error.diagnostics,
+                    }, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
                 store.finish_run(run_id, "partial" if pages else "blocked", {"pages": pages,
                     "unique_ids": len(seen_ids), "site_count": expected, "has_more": has_more,
                     "with_coordinates": len(geo_ids), "excluded_without_coordinates": without_coordinates,

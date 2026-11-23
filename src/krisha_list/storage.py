@@ -196,6 +196,22 @@ class ListingStore:
         ).fetchone()
         return dict(row) if row else None
 
+    def source_failure_streak(self) -> int:
+        """Count consecutive source refusals since the last successful live crawl."""
+        rows = self.connection.execute(
+            """SELECT source_status, status FROM collection_runs
+               WHERE kind IN ('live', 'cli_collect') AND
+                 (source_status IN (403, 429, 468) OR (source_status = 200 AND status = 'blocked')
+                  OR status IN ('complete', 'limited'))
+               ORDER BY id DESC LIMIT 4"""
+        ).fetchall()
+        streak = 0
+        for row in rows:
+            if row["status"] in ("complete", "limited"):
+                break
+            streak += 1
+        return streak
+
     def list_catalog(self) -> list[dict]:
         rows = [dict(row) for row in self.connection.execute("SELECT * FROM listings ORDER BY last_seen_at DESC, id DESC")]
         history: dict[int, list[dict]] = {}

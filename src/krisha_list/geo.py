@@ -25,6 +25,32 @@ class GeoPoint:
     longitude: float
     zoom: int | None
     map_type: str | None
+    source: str = "krisha_map_list"
+
+
+def snapshot_geo_points(records: list[dict]) -> dict[int, GeoPoint]:
+    """Reuse validated map positions from a recent matching collection."""
+    points: dict[int, GeoPoint] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        listing_id = record.get("id")
+        lat, lon = record.get("latitude"), record.get("longitude")
+        if type(listing_id) is not int or listing_id <= 0 or type(lat) not in (int, float) or type(lon) not in (int, float):
+            continue
+        if not str(record.get("geo_source") or "").startswith("krisha_map_list"):
+            continue
+        if not (math.isfinite(lat) and math.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
+            continue
+        if lat == 0 and lon == 0:
+            continue
+        zoom = record.get("geo_zoom")
+        map_type = record.get("geo_type")
+        points[listing_id] = GeoPoint(
+            float(lat), float(lon), zoom if type(zoom) is int else None,
+            map_type if isinstance(map_type, str) else None, "krisha_map_list_cached",
+        )
+    return points
 
 
 def map_list_url(search_url: str) -> str:
@@ -110,7 +136,7 @@ def fetch_page_geo(
 def attach_geo(page: ParsedPage, points: dict[int, GeoPoint]) -> ParsedPage:
     return replace(page, listings=tuple(
         replace(item, latitude=point.latitude, longitude=point.longitude,
-                geo_source="krisha_map_list", geo_zoom=point.zoom, geo_type=point.map_type)
+                geo_source=point.source, geo_zoom=point.zoom, geo_type=point.map_type)
         if (point := points.get(item.id)) else item
         for item in page.listings
     ))
@@ -127,11 +153,18 @@ class GeoEnricher:
     def __init__(
         self, session: requests.Session, *, timeout: float = 20.0,
         on_json: Callable[[str, str], None] | None = None,
+        known_points: dict[int, GeoPoint] | None = None,
     ) -> None:
         self.session = session
         self.timeout = timeout
         self.on_json = on_json
         self.cache: dict[str, dict[int, GeoPoint]] = {}
+        self.known_points = known_points or {}
+        self.reused_ids: set[int] = set()
+
+    @property
+    def reused_count(self) -> int:
+        return len(self.reused_ids)
 
     def _load(self, search_url: str) -> dict[int, GeoPoint]:
         key = map_list_url(search_url)
@@ -143,15 +176,29 @@ class GeoEnricher:
         return self.cache[key]
 
     def enrich(self, page: ParsedPage) -> tuple[ParsedPage, list[str]]:
+        wanted = {item.id for item in page.listings}
+        if wanted <= self.known_points.keys():
+            self.reused_ids.update(wanted)
+            return attach_geo(page, self.known_points), []
         try:
             points = dict(self._load(page.url))
         except GeoFetchError as error:
-            return page, [str(error)]
-        missing = {item.id for item in page.listings} - points.keys()
+            available = {listing_id: self.known_points[listing_id]
+                         for listing_id in wanted if listing_id in self.known_points}
+            self.reused_ids.update(available)
+            return attach_geo(page, available), [str(error)]
+        for listing_id in wanted - points.keys():
+            if listing_id in self.known_points:
+                points[listing_id] = self.known_points[listing_id]
+        missing = wanted - points.keys()
         errors: list[str] = []
         if missing and page.next_url and urlsplit(page.next_url).path == urlsplit(page.url).path:
             try:
                 points.update(self._load(page.next_url))
             except GeoFetchError as error:
                 errors.append(f"следующая страница карты: {error}")
+        self.reused_ids.update(
+            listing_id for listing_id in wanted
+            if listing_id in points and points[listing_id].source == "krisha_map_list_cached"
+        )
         return attach_geo(page, points), errors

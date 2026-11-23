@@ -9,7 +9,6 @@ import sqlite3
 import re
 from io import StringIO
 from datetime import datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
@@ -20,43 +19,21 @@ from .client import CrawlError, PacedSession, SourceHTTPError, crawl_pages, vali
 from .api_v1 import parse_listings_query, parse_runs_query
 from .area import bounds_from_url, filter_page, parse_bounds, parse_polygon, with_bounds
 from .categories import AREA_URLS, DEFAULT_URLS
-from .geo import GeoEnricher, page_number_from_url
+from .geo import GeoEnricher, page_number_from_url, snapshot_geo_points
 from .location import filter_page_location, normalize_place
 from .model import Listing, PageFormatError
 from .parser import parse_listing_page
 from .snapshot_cache import find_last_complete, request_identity, save_success
 from .storage import ListingStore
+from .source_policy import source_retry_at
 
 
 FRESH_SNAPSHOT_AGE = timedelta(minutes=15)
-SOURCE_COOLDOWN = timedelta(minutes=30)
+GEO_REUSE_AGE = timedelta(hours=6)
 
 
 def public_run(run: dict) -> dict:
     return {key: value for key, value in run.items() if key not in {"request_json", "snapshot_dir"}}
-
-
-def source_retry_at(access: dict | None) -> datetime | None:
-    if not access or not access["finished_at"] or not (
-        access["source_status"] in (403, 429, 468) or
-        (access["source_status"] == 200 and access["status"] == "blocked")
-    ):
-        return None
-    finished = datetime.fromisoformat(access["finished_at"])
-    retry_at = finished + SOURCE_COOLDOWN
-    snapshot_dir = access.get("snapshot_dir")
-    if snapshot_dir:
-        try:
-            saved = json.loads((Path(snapshot_dir) / "source-error.json").read_text(encoding="utf-8"))
-            value = saved.get("response", {}).get("retry_after")
-            if isinstance(value, str) and value.strip():
-                suggested = finished + timedelta(seconds=int(value)) if value.isdecimal() else parsedate_to_datetime(value)
-                if suggested.tzinfo is None:
-                    suggested = suggested.replace(tzinfo=timezone.utc)
-                retry_at = max(retry_at, suggested)
-        except (OSError, ValueError, TypeError, OverflowError, AttributeError):
-            pass
-    return retry_at
 
 
 def serve(*, port: int, db_path: str | Path, default_url: str, enable_live: bool,
@@ -376,8 +353,9 @@ def serve(*, port: int, db_path: str | Path, default_url: str, enable_live: bool
                 now = datetime.now(timezone.utc)
                 with ListingStore(db_path) as store:
                     last_access = store.latest_source_access()
+                    failure_streak = store.source_failure_streak()
                 cached = find_last_complete(snapshots_root, identity, bounds, polygon)
-                retry_at = source_retry_at(last_access)
+                retry_at = source_retry_at(last_access, failure_streak)
                 if retry_at and now < retry_at:
                     if cached is not None:
                         with ListingStore(db_path) as store:
@@ -391,12 +369,13 @@ def serve(*, port: int, db_path: str | Path, default_url: str, enable_live: bool
                                          "code": "source_cooldown", "source_status": last_access["source_status"],
                                          "next_retry_at": retry_at.isoformat()})
                     return
+                age = None
                 if cached is not None:
                     try:
                         cached_at = datetime.fromisoformat(cached["cached_at"])
                         age = now - cached_at
                     except (TypeError, ValueError):
-                        age = None
+                        pass
                     if age is not None and timedelta(0) <= age <= FRESH_SNAPSHOT_AGE:
                         with ListingStore(db_path) as store:
                             store.merge_snapshot(cached["listings"], observed_at=cached["cached_at"],
@@ -415,9 +394,13 @@ def serve(*, port: int, db_path: str | Path, default_url: str, enable_live: bool
                     (run_dir / f"{stem}.url.txt").write_text(page_url + "\n", encoding="utf-8")
 
                 geo_errors: list[str] = []
+                known_points = snapshot_geo_points(cached["listings"]) if (
+                    cached is not None and age is not None and timedelta(0) <= age <= GEO_REUSE_AGE
+                ) else {}
                 with ListingStore(db_path) as store, PacedSession(interval=3) as source_session:
                     geo_enricher = GeoEnricher(
                         source_session,
+                        known_points=known_points,
                         on_json=lambda source, raw: (run_dir / f"map-page-{page_number_from_url(source):03d}.json").write_text(raw, encoding="utf-8"),
                     )
                     for page in crawl_pages(search_url, max_pages=max_pages, delay=0,
@@ -447,6 +430,7 @@ def serve(*, port: int, db_path: str | Path, default_url: str, enable_live: bool
                     "pagination_exhausted": not has_more,
                     "has_more": has_more,
                     "with_coordinates": sum(item["latitude"] is not None for item in records.values()),
+                    "reused_coordinates": getattr(geo_enricher, "reused_count", 0),
                     "geo_errors": geo_errors,
                     "bounds": bounds.as_query() if bounds else None,
                     "area_kind": "polygon" if polygon else ("rectangle" if bounds else None),

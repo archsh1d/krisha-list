@@ -520,6 +520,10 @@
           "unique_ids": {
             "type": "integer"
           },
+          "reused_coordinates": {
+            "type": "integer",
+            "description": "Сәйкес келетін соңғы көшірмеден қайта қолданылған карта нүктелерінің саны"
+          },
           "pagination_exhausted": {
             "type": "boolean"
           },

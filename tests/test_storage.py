@@ -14,6 +14,18 @@ FIXTURE = Path(__file__).parent / "fixtures" / "list_page.html"
 
 
 class StorageTests(unittest.TestCase):
+    def test_source_refusal_streak_resets_after_success(self):
+        with TemporaryDirectory() as tmp:
+            with ListingStore(Path(tmp) / "listings.sqlite3") as store:
+                self.assertEqual(store.source_failure_streak(), 0)
+                for status in (468, 429):
+                    run_id = store.start_run("live", {"search_url": URL})
+                    store.finish_run(run_id, "blocked", {"pages": 0}, source_status=status)
+                self.assertEqual(store.source_failure_streak(), 2)
+                run_id = store.start_run("live", {"search_url": URL})
+                store.finish_run(run_id, "complete", {"pages": 1})
+                self.assertEqual(store.source_failure_streak(), 0)
+
     def test_upsert_preserves_first_seen_and_records_price_changes(self):
         page = parse_listing_page(FIXTURE.read_text(encoding="utf-8"), URL)
         with TemporaryDirectory() as tmp:

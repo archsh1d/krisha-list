@@ -108,6 +108,7 @@
       }, "additionalProperties": true },
       "CollectionResult": { "type": "object", "properties": {
         "run_id": { "type": "integer" }, "pages": { "type": "integer" }, "unique_ids": { "type": "integer" },
+        "reused_coordinates": { "type": "integer", "description": "Число точек из подходящего сохранённого снимка" },
         "pagination_exhausted": { "type": "boolean" }, "cached": { "type": "boolean" },
         "listings": { "type": "array", "items": { "$ref": "#/components/schemas/Listing" } }
       }, "additionalProperties": true }

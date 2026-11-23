@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 import requests
 
 from krisha_list.client import SourceHTTPError
-from krisha_list.geo import GeoEnricher, GeoFetchError, attach_geo, fetch_page_geo, map_list_url, parse_map_list
+from krisha_list.geo import GeoEnricher, GeoFetchError, attach_geo, fetch_page_geo, map_list_url, parse_map_list, snapshot_geo_points
 from krisha_list.parser import parse_listing_page
 from krisha_list.storage import ListingStore
 
@@ -146,3 +146,51 @@ class GeoTests(unittest.TestCase):
         second_page = parse_listing_page(FIXTURE.read_text(encoding="utf-8"), second_url)
         enricher.enrich(second_page)
         self.assertEqual(session.requested, [first_map, second_map])
+
+    def test_recent_snapshot_reuses_all_known_points_without_map_request(self):
+        page = parse_listing_page(FIXTURE.read_text(encoding="utf-8"), URL)
+        records = [
+            {"id": item.id, "latitude": 43.25, "longitude": 76.88,
+             "geo_source": "krisha_map_list", "geo_zoom": 16, "geo_type": None}
+            for item in page.listings
+        ]
+        session = PageSession({})
+        enricher = GeoEnricher(session, known_points=snapshot_geo_points(records))
+        enriched, errors = enricher.enrich(page)
+        self.assertEqual(errors, [])
+        self.assertEqual(session.requested, [])
+        self.assertEqual(enricher.reused_count, len(page.listings))
+        self.assertTrue(all(item.geo_source == "krisha_map_list_cached" for item in enriched.listings))
+
+    def test_new_map_response_supersedes_snapshot_and_access_refusal_still_stops(self):
+        page = parse_listing_page(FIXTURE.read_text(encoding="utf-8"), URL)
+        prior = snapshot_geo_points([{
+            "id": 123, "latitude": 43.2, "longitude": 76.8,
+            "geo_source": "krisha_map_list",
+        }])
+        url = map_list_url(URL)
+        current = json_response(url, {"adverts": {
+            "123": {"map": {"lat": 43.26, "lon": 76.87}},
+            "456": {"map": {"lat": 43.25, "lon": 76.88}},
+        }})
+        enricher = GeoEnricher(FakeSession(current), known_points=prior)
+        enriched, _ = enricher.enrich(page)
+        self.assertEqual(enriched.listings[0].latitude, 43.26)
+        self.assertEqual(enriched.listings[0].geo_source, "krisha_map_list")
+        self.assertEqual(enricher.reused_count, 0)
+        with self.assertRaises(SourceHTTPError):
+            GeoEnricher(FakeSession(json_response(url, {}, status=468)), known_points=prior).enrich(page)
+
+    def test_map_format_error_retains_known_snapshot_positions(self):
+        page = parse_listing_page(FIXTURE.read_text(encoding="utf-8"), URL)
+        prior = snapshot_geo_points([{
+            "id": 123, "latitude": 43.2, "longitude": 76.8,
+            "geo_source": "krisha_map_list",
+        }])
+        enricher = GeoEnricher(FakeSession(json_response(map_list_url(URL), {"wrong": True})),
+                               known_points=prior)
+        enriched, errors = enricher.enrich(page)
+        self.assertEqual(len(errors), 1)
+        self.assertEqual(enriched.listings[0].latitude, 43.2)
+        self.assertIsNone(enriched.listings[1].latitude)
+        self.assertEqual(enricher.reused_count, 1)

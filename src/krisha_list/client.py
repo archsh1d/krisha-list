@@ -26,6 +26,7 @@ class PacedSession(requests.Session):
             raise ValueError("Интервал запросов не может быть отрицательным")
         self.interval = interval
         self._next_request_at = 0.0
+        self._completed_requests = 0
         self._request_lock = Lock()
         self.headers.update({
             "User-Agent": "krisha-list/0.1 (authorized research collector)",
@@ -40,7 +41,9 @@ class PacedSession(requests.Session):
             try:
                 return super().get(url, **kwargs)
             finally:
-                self._next_request_at = time.monotonic() + self.interval
+                self._completed_requests += 1
+                step = min(self._completed_requests // 6, 3)
+                self._next_request_at = time.monotonic() + self.interval * (1 + step)
 
 
 class SourceHTTPError(CrawlError):
