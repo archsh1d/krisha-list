@@ -16,7 +16,7 @@ docker compose up --build -d
 docker compose ps
 ```
 
-Open `http://127.0.0.1:8765/`. The service is bound to this computer and **live collection is disabled by default**. You can view the synthetic example or import your own previously saved HTML. After obtaining your own written permission from Kolesa, set `KRISHA_ENABLE_LIVE=1` in the private `.env` file and restart:
+Open `http://127.0.0.1:8765/`. The service is bound to this computer and **live collection is disabled by default**. To test without contacting the source, import the synthetic [HTML file](web/dist/sample.html) or your own previously saved HTML. After obtaining your own written permission from Kolesa, set `KRISHA_ENABLE_LIVE=1` in the private `.env` file and restart:
 
 ```sh
 docker compose up -d --force-recreate

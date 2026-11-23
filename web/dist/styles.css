@@ -100,6 +100,8 @@ input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #
 .helper-disclosure > summary { color: var(--muted); text-decoration: underline; text-underline-offset: 3px; }
 .helper-disclosure > div { margin-top: 10px; }
 .helper-disclosure code { display: block; margin-top: 6px; padding: 9px; background: var(--surface); border-radius: 6px; font-size: 11px; overflow-wrap: anywhere; }
+.helper-disclosure label { display: block; margin-top: 12px; margin-bottom: 6px; }
+.helper-disclosure input { font-size: 12px; }
 .status { margin: 15px 0 0; color: var(--ink); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .status:empty { display: none; }
 .status.error { color: var(--error); }

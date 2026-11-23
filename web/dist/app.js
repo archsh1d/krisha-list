@@ -4,7 +4,7 @@ const STORAGE_KEY = "krisha-list.catalog.v1";
 const AREA_KEY = "krisha-list.area.v1";
 const $ = (selector) => document.querySelector(selector);
 const tr = (value) => window.KrishaI18n.translate(value);
-const isLocalHost = ["127.0.0.1", "localhost"].includes(window.location.hostname);
+let isLocalHost = ["127.0.0.1", "localhost"].includes(window.location.hostname);
 const legacyBrowserListings = readSaved();
 const state = { listings: isLocalHost ? [] : legacyBrowserListings, runs: [], storageWarning: false, revision: 0 };
 let shownCount = 100;
@@ -300,7 +300,7 @@ function renderAnalysis(visible) {
   const maximum = Math.max(...groups.filter((group) => group.count >= 5).map((group) => group.median), 1);
   const container = $("#distribution");
   if (!groups.length) {
-    container.innerHTML = `<p class="distribution-empty">${mixedCategories ? "Выберите категорию в фильтрах." : rows.length ? "Для этой группировки не хватает данных." : category === "apartment" ? "Нужны цена и площадь квартир." : "Нужны цена и площадь участков."}</p>`;
+    container.innerHTML = `<p class="distribution-empty">${mixedCategories ? "Выберите категорию в фильтрах." : rows.length ? "Для этой группировки не хватает данных." : category === "apartment" ? "Нужны цена и площадь квартир." : "Нужны цена объекта и площадь участка."}</p>`;
   } else {
     container.innerHTML = groups.map((group) => `<div class="distribution-row${group.count < 5 ? " is-small" : ""}"><span class="distribution-label">${escapeHtml(group.label)}</span><span class="distribution-track">${group.count >= 5 ? `<span class="distribution-fill" style="width:${Math.max(4, Math.round(group.median / maximum * 100))}%"></span>` : ""}</span><strong title="${group.count >= 5 ? `${escapeHtml(formatPrice(Math.round(group.median)))} ${tr(`за 1 ${unit}`)}` : tr("Менее 5 объектов")}">${group.count >= 5 ? escapeHtml(compactMoney(group.median)) : "—"}</strong><span class="distribution-count">n=${numberFormat.format(group.count)}</span></div>`).join("");
   }
@@ -1083,11 +1083,37 @@ $("#clear-button").addEventListener("click", () => {
 });
 
 let liveEnabled = false;
+const staticUi = {
+  hint: $("#collector-hint-text").textContent,
+  command: $("#collector-hint-command").textContent,
+  source: $("#catalog-source-note").textContent
+};
 if (isLocalHost) {
   $("#clear-button").hidden = true;
   $("#demo-button").hidden = true;
+  $("#collector-address-label").hidden = true;
+  $("#collector-url").hidden = true;
+  $("#collector-hint-text").textContent = "Живой сбор выключен. В Docker задайте KRISHA_ENABLE_LIVE=1 в .env, а без Docker запустите сервер с --enable-live.";
+  $("#collector-hint-command").textContent = "docker compose up -d --force-recreate";
   $("#catalog-source-note").textContent = "Каталог и история цен сохранены в локальной базе SQLite.";
   $("#run-toolbar").hidden = false;
+}
+function switchToStaticMode() {
+  if (!isLocalHost) return;
+  isLocalHost = false;
+  state.listings = legacyBrowserListings;
+  state.runs = [];
+  state.revision++;
+  $("#clear-button").hidden = false;
+  $("#demo-button").hidden = false;
+  $("#collector-address-label").hidden = false;
+  $("#collector-url").hidden = false;
+  $("#collector-hint-text").textContent = staticUi.hint;
+  $("#collector-hint-command").textContent = staticUi.command;
+  $("#catalog-source-note").textContent = staticUi.source;
+  $("#run-toolbar").hidden = true;
+  $("#collect-button").disabled = false;
+  render();
 }
 function updateLinkSummary() {
   updateText("#filter-link-summary", $("#live-search-url").value.trim() ? "Ссылка задана" : "По умолчанию");
@@ -1177,8 +1203,13 @@ function enhanceSelectMenus() {
 $("#live-search-url").addEventListener("input", updateLinkSummary);
 if (isLocalHost) $("#collect-button").disabled = true;
 fetch("/api/status", { cache: "no-store" }).then(async (response) => {
-  if (!response.ok) return;
+  if (!response.ok || !response.headers.get("Content-Type")?.includes("application/json")) {
+    switchToStaticMode();
+    return;
+  }
   const status = await response.json();
+  if (typeof status.live_enabled !== "boolean") { switchToStaticMode(); return; }
+  if (!isLocalHost) return;
   if (isLocalHost) await initializeLocalCatalog();
   if (!status.live_enabled) return;
   liveEnabled = true;
@@ -1361,12 +1392,22 @@ $("#collect-button").addEventListener("click", async () => {
     request = buildCollectionRequest(selection);
   } catch (error) { setStatus(error.message, true); return; }
   if (!liveEnabled) {
+    let collector;
+    try {
+      collector = new URL($("#collector-url").value.trim());
+      if (collector.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(collector.hostname)
+          || !collector.port || collector.username || collector.password || collector.pathname !== "/"
+          || collector.search || collector.hash) throw new Error();
+    } catch {
+      setStatus("Укажите локальный HTTP-адрес сборщика с портом.", true);
+      return;
+    }
     const handoff = {
       category: $("#live-category").value, pages: Number($("#live-pages").value),
       city: $("#live-city").value, place: $("#live-place").value, collectionMode,
       url: $("#live-search-url").value.trim(), area: selection
     };
-    window.location.assign(`http://127.0.0.1:8765/#collect=${encodeURIComponent(JSON.stringify(handoff))}`);
+    window.location.assign(`${collector.origin}/#collect=${encodeURIComponent(JSON.stringify(handoff))}`);
     return;
   }
   const button = $("#collect-button");

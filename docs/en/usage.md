@@ -4,7 +4,9 @@
 
 ## Web interface
 
-Start with [deployment](deployment.md). The [historical private demo](https://krisha-list-workbench-20261114.fruitfulflask8.chatgpt.site) requires ChatGPT sign-in and stores imported data in your browser. The local interface uses SQLite for listings, price history, and run history, and generates CSV through the local API. The published static site does not contact Krisha.kz. Its “Collect listings” button transfers the selected category, location, polygon, and filters to a collector running at `127.0.0.1:8765`; press the button again on the local page to start.
+Start with [deployment](deployment.md). The local interface reads listings, price history, and run history from SQLite and generates CSV through the local API. To test import without contacting Krisha.kz, use the synthetic [HTML file](../../web/dist/sample.html).
+
+If you host `web/dist` separately as a static page, it stores imported data in the browser and offers a “View example” button. Its “Collect listings” button transfers the selected category, location, polygon, and filters to your local collector; press the button again on the local page to start. Set a nondefault collector port in the “Collection runs locally” disclosure. The static page itself does not contact Krisha.kz.
 
 Choose houses/cottages or apartments, a city, and either a district/neighborhood name or a map area. Suggestions include known Krisha.kz sections and addresses from saved listings. A known section is requested directly. An arbitrary name is checked against addresses on fetched city pages; a page limit can omit matches. “All pages” follows available pagination but source refusal can still interrupt it. Your selection also filters the catalog, summary, map, and CSV.
 
@@ -26,7 +28,7 @@ To apply Krisha.kz filters such as price or rooms, paste the HTTPS search-result
 
 ## Developer API
 
-The versioned server API is at `/api/v1`. The published static site contains [API guidance](https://krisha-list-workbench-20261114.fruitfulflask8.chatgpt.site/api.html) and [OpenAPI 3.1](../../web/dist/openapi.en.json), but does not publish your SQLite catalog or start collection. Data comes from your own running server.
+The versioned server API is at `/api/v1`. The bundled static files contain [API guidance](../../web/dist/api.html) and [OpenAPI 3.1](../../web/dist/openapi.en.json), but do not publish your SQLite catalog or start collection. Data comes from your own running server.
 
 Create a token once and start the server:
 
